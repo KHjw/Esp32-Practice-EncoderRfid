@@ -12,8 +12,8 @@ boolean isButtonPushDown(void){
 }
 
 void Starter_Guage(int AnswerRev){
-  int SingleRevVal = 4000;
-  int AnswerVal = 4000;
+  int SingleRevVal = 3000;
+  int AnswerVal = 3000;
 
   AnswerVal=SingleRevVal*AnswerRev;
 
