@@ -23,15 +23,12 @@
 
 void setup(void) {
   Serial.begin(115200);
-
-  GameSetup();
   RfidInit();
-  // Encoder_Setup();
+  Encoder_Setup();
 }
 
 void loop(void) {
-  RfidLoop();
-  // Encoder_Read_Loop();
+  GameSystem();
 }
 # 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
 long readEncoderValue(void){
@@ -55,27 +52,29 @@ void Starter_Guage(int AnswerRev){
 
   if(readEncoderValue()>=(AnswerVal+50*AnswerRev)){
     Serial.print("====== Starter Guage Full!!!");
+    StarterProgress = 1;
   }
   else{
-    Serial.print("=== Keep going");
+    Serial.print("====== Keep going");
+    StarterProgress = 0;
   }
 }
 
 void Encoder_Setup(){
-  pinMode(12, 0x01);
-  pinMode(13, 0x01);
+  pinMode(34, 0x01);
+  pinMode(35, 0x01);
   pinMode(4, 0x01);
 
-  digitalWrite(12, 0x1); //turn pullup resistor on
-  digitalWrite(13, 0x1); //turn pullup resistor on
+  digitalWrite(34, 0x1); //turn pullup resistor on
+  digitalWrite(35, 0x1); //turn pullup resistor on
 
   //call updateEncoder() when any high/low changed seen
   //on interrupt 0 (pin 2), or interrupt 1 (pin 3)
-  attachInterrupt(12, updateEncoder, 0x03);
-  attachInterrupt(13, updateEncoder, 0x03);
+  attachInterrupt(34, updateEncoder, 0x03);
+  attachInterrupt(35, updateEncoder, 0x03);
 }
 
-void Encoder_Read_Loop(){ // "encoder값, 버튼눌림" 을 표시
+void Encoder_Progress_Loop(){ // "encoder값, 버튼눌림" 을 표시
   if(isButtonPushDown()){
     Serial.print(readEncoderValue());
     Serial.print(", ");
@@ -92,8 +91,8 @@ void Encoder_Read_Loop(){ // "encoder값, 버튼눌림" 을 표시
 }
 
 void updateEncoder(){
-  int MSB = digitalRead(12); //MSB = most significant bit
-  int LSB = digitalRead(13); //LSB = least significant bit
+  int MSB = digitalRead(34); //MSB = most significant bit
+  int LSB = digitalRead(35); //LSB = least significant bit
 
   int encoded = (MSB << 1) |LSB; //converting the 2 pin value to single number
   int sum = (lastEncoded << 2) | encoded; //adding it to the previous encoded value
@@ -105,30 +104,22 @@ void updateEncoder(){
 }
 # 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\game.ino"
 void GameSetup(){
-  CorrectRev = 10;
+
 }
 
-void RfidCheck(uint8_t data[32]){
-  String RfidID = "";
-
-  for(int i=0; i<4; i++){
-    RfidID += (char)data[i];
+void GameSystem(){
+  if(RfidPASS == 0){
+    RfidLoop();
+    Serial.println("SEARCHING FOR PLAYER CHIP.....");
   }
-
-  if(RfidID == "G1P9")
-  {
-    Serial.print("G1P9");
-    CorrectRev = 10;
+  else{
+    if(StarterProgress == 0){
+      Encoder_Progress_Loop();
+    }
+    else{
+      RfidCheckLoop();
+    }
   }
-  else if(RfidID == "G1P8")
-  {
-    Serial.print("G1P8");
-    CorrectRev = 5;
-  }
-  else
-    Serial.print("Unidentified Chip");
-
-  Serial.println("");
 }
 # 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\rfid.ino"
 void RfidInit(){
@@ -144,6 +135,32 @@ void RfidInit(){
   Serial.println("Found PN532"); // Got ok data, print it out!
   nfc.SAMConfig(); // configure board to read RFID tags
   Serial.println("Waiting for Card ...");
+}
+
+void Rfid_Identify(uint8_t data[32]){
+  String RfidID = "";
+
+  for(int i=0; i<4; i++){
+    RfidID += (char)data[i];
+  }
+
+  if(RfidID == "G1P9")
+  {
+    Serial.print("G1P9");
+    CorrectRev = 10;
+    RfidPASS = 1;
+  }
+  else if(RfidID == "G1P7")
+  {
+    Serial.print("G1P7");
+    CorrectRev = 5;
+    RfidPASS = 1;
+  }
+  else{
+    Serial.print("Unidentified Chip");
+    RfidPASS = 0;
+  }
+  Serial.println("");
 }
 
 void RfidLoop(){
@@ -164,7 +181,36 @@ void RfidLoop(){
 
       if (success)
       {
-        RfidCheck(data);
+        Rfid_Identify(data);
+      }
+    }
+    else
+    {
+      Serial.println("This doesn't seem to be an NTAG203 tag");
+    }
+    Serial.flush();
+  }
+  delay (50);
+}
+
+void RfidCheckLoop(){
+  uint8_t success;
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 }; // Buffer to store the returned UID
+  uint8_t uidLength; // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
+
+  success = nfc.readPassiveTargetID((0x00), uid, &uidLength);
+
+  if (success) {
+    if (uidLength == 7)
+    {
+      uint8_t data[32];
+      success = nfc.ntag2xx_ReadPage(7, data);
+      if (success)
+      {
+        Serial.print("NTAG2xx tag Detected");
+        RfidPASS = 0;
+        StarterProgress = 0;
+        encoderValue = 0;
       }
     }
     else

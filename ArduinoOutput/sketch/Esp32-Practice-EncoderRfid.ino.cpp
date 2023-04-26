@@ -15,7 +15,7 @@
 
 #line 14 "c:\\Github\\Esp32-Practice-EncoderRfid\\Esp32-Practice-EncoderRfid.ino"
 void setup(void);
-#line 22 "c:\\Github\\Esp32-Practice-EncoderRfid\\Esp32-Practice-EncoderRfid.ino"
+#line 20 "c:\\Github\\Esp32-Practice-EncoderRfid\\Esp32-Practice-EncoderRfid.ino"
 void loop(void);
 #line 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
 long readEncoderValue(void);
@@ -23,32 +23,33 @@ long readEncoderValue(void);
 boolean isButtonPushDown(void);
 #line 14 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
 void Starter_Guage(int AnswerRev);
-#line 28 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
+#line 30 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
 void Encoder_Setup();
-#line 42 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
-void Encoder_Read_Loop();
-#line 58 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
+#line 44 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
+void Encoder_Progress_Loop();
+#line 60 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
 void updateEncoder();
 #line 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\game.ino"
 void GameSetup();
 #line 5 "c:\\Github\\Esp32-Practice-EncoderRfid\\game.ino"
-void RfidCheck(uint8_t data[32]);
+void GameSystem();
 #line 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\rfid.ino"
 void RfidInit();
 #line 16 "c:\\Github\\Esp32-Practice-EncoderRfid\\rfid.ino"
+void Rfid_Identify(uint8_t data[32]);
+#line 42 "c:\\Github\\Esp32-Practice-EncoderRfid\\rfid.ino"
 void RfidLoop();
+#line 72 "c:\\Github\\Esp32-Practice-EncoderRfid\\rfid.ino"
+void RfidCheckLoop();
 #line 14 "c:\\Github\\Esp32-Practice-EncoderRfid\\Esp32-Practice-EncoderRfid.ino"
 void setup(void) {
   Serial.begin(115200);
-
-  GameSetup();
   RfidInit();
-  // Encoder_Setup();
+  Encoder_Setup();
 }
 
 void loop(void) {
-  RfidLoop();
-  // Encoder_Read_Loop();
+  GameSystem();
 }
 
 #line 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\encoder.ino"
@@ -73,9 +74,11 @@ void Starter_Guage(int AnswerRev){
 
   if(readEncoderValue()>=(AnswerVal+50*AnswerRev)){
     Serial.print("====== Starter Guage Full!!!");
+    StarterProgress = 1;
   }
   else{
-    Serial.print("=== Keep going");
+    Serial.print("====== Keep going");
+    StarterProgress = 0;
   }
 }
 
@@ -93,7 +96,7 @@ void Encoder_Setup(){
   attachInterrupt(encoderPinB, updateEncoder, CHANGE);
 }
 
-void Encoder_Read_Loop(){                                // "encoder값, 버튼눌림" 을 표시
+void Encoder_Progress_Loop(){                                // "encoder값, 버튼눌림" 을 표시
   if(isButtonPushDown()){
     Serial.print(readEncoderValue());
     Serial.print(", ");
@@ -123,30 +126,22 @@ void updateEncoder(){
 }
 #line 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\game.ino"
 void GameSetup(){
-  CorrectRev = 10;
+
 }
 
-void RfidCheck(uint8_t data[32]){
-  String RfidID = "";
-
-  for(int i=0; i<4; i++){
-    RfidID += (char)data[i];
+void GameSystem(){
+  if(RfidPASS == 0){
+    RfidLoop();
+    Serial.println("SEARCHING FOR PLAYER CHIP.....");
   }
-
-  if(RfidID == "G1P9")
-  {
-    Serial.print("G1P9");
-    CorrectRev = 10;
+  else{
+    if(StarterProgress == 0){
+      Encoder_Progress_Loop();
+    }
+    else{
+      RfidCheckLoop();
+    }
   }
-  else if(RfidID == "G1P8")
-  {
-    Serial.print("G1P8");
-    CorrectRev = 5;
-  }
-  else
-    Serial.print("Unidentified Chip");
-
-  Serial.println("");
 }
 #line 1 "c:\\Github\\Esp32-Practice-EncoderRfid\\rfid.ino"
 void RfidInit(){
@@ -164,11 +159,37 @@ void RfidInit(){
   Serial.println("Waiting for Card ...");
 }
 
+void Rfid_Identify(uint8_t data[32]){
+  String RfidID = "";
+
+  for(int i=0; i<4; i++){
+    RfidID += (char)data[i];
+  }
+
+  if(RfidID == "G1P9")
+  {
+    Serial.print("G1P9");
+    CorrectRev = 10;
+    RfidPASS = 1;
+  }
+  else if(RfidID == "G1P7")
+  {
+    Serial.print("G1P7");
+    CorrectRev = 5;
+    RfidPASS = 1;
+  }
+  else{
+    Serial.print("Unidentified Chip");
+    RfidPASS = 0;
+  }
+  Serial.println("");
+}
+
 void RfidLoop(){
   uint8_t success;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
-    
+  
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
   
   if (success) {
@@ -182,7 +203,36 @@ void RfidLoop(){
 
       if (success) 
       {
-        RfidCheck(data);
+        Rfid_Identify(data);
+      }
+    }
+    else
+    {
+      Serial.println("This doesn't seem to be an NTAG203 tag");
+    }
+    Serial.flush();    
+  }
+  delay (50);
+}
+
+void RfidCheckLoop(){
+  uint8_t success;
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
+  uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
+    
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+  
+  if (success) {
+    if (uidLength == 7)
+    {
+      uint8_t data[32];
+      success = nfc.ntag2xx_ReadPage(7, data); 
+      if (success) 
+      {
+        Serial.print("NTAG2xx tag Detected");
+        RfidPASS = 0;
+        StarterProgress = 0;
+        encoderValue = 0;
       }
     }
     else

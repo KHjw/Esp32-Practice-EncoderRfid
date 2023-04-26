@@ -13,13 +13,10 @@
 
 void setup(void) {
   Serial.begin(115200);
-
-  GameSetup();
   RfidInit();
-  // Encoder_Setup();
+  Encoder_Setup();
 }
 
 void loop(void) {
-  RfidLoop();
-  // Encoder_Read_Loop();
+  GameSystem();
 }

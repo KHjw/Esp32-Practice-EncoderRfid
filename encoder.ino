@@ -19,9 +19,11 @@ void Starter_Guage(int AnswerRev){
 
   if(readEncoderValue()>=(AnswerVal+50*AnswerRev)){
     Serial.print("====== Starter Guage Full!!!");
+    StarterProgress = 1;
   }
   else{
-    Serial.print("=== Keep going");
+    Serial.print("====== Keep going");
+    StarterProgress = 0;
   }
 }
 
@@ -39,7 +41,7 @@ void Encoder_Setup(){
   attachInterrupt(encoderPinB, updateEncoder, CHANGE);
 }
 
-void Encoder_Read_Loop(){                                // "encoder값, 버튼눌림" 을 표시
+void Encoder_Progress_Loop(){                                // "encoder값, 버튼눌림" 을 표시
   if(isButtonPushDown()){
     Serial.print(readEncoderValue());
     Serial.print(", ");
